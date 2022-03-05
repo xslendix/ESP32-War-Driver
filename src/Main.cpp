@@ -18,12 +18,14 @@ char const* log_col_names[LOG_COLUMN_COUNT] = {
     "MAC", "SSID", "AuthMode", "FirstSeen", "Channel", "RSSI", "Latitude", "Longitude", "AltitudeMeters", "AccuracyMeters", "Type"
 };
 
+char const* PRE_HEADER = "WigleWifi-1.4,appRelease=1.0,model=ESP32,release=0.0.0,device=ESP32WarDriving,display=SSD1306,board=esp32,brand=WeMos";
+
 TinyGPSPlus gps;
 
 uint total_networks = 0;
 
 void UpdateFileName();
-void PutHeader(char const*);
+bool PutHeader(char const*);
 void ScanWiFiAndBluetoothNetworks(char const*);
 
 void setup()
@@ -42,11 +44,13 @@ void setup()
 
     if (flag) {
         UpdateFileName();
-        PutHeader(logFileName);
+        if (!PutHeader(logFileName))
+            flag = false;
+        
+        if (!flag)
+            Serial.println("Failed to write header");
     } else {
-        while (true) {
-            delay(200);
-        }
+        while (true) delay(200);
     }
 }
 
@@ -57,16 +61,21 @@ void loop()
     }
 }
 
-void PutHeader(char const* filename)
+bool PutHeader(char const* filename)
 {
     File file = SD.open(filename, FILE_WRITE);
-    for (uint i = 0; i < LOG_COLUMN_COUNT; i++) {
-        if (i != 0)
-            file.print(',');
-        file.print(log_col_names[i]);
+    if (file) {
+        file.println(PRE_HEADER);
+        for (uint i = 0; i < LOG_COLUMN_COUNT; i++) {
+            if (i != 0)
+                file.print(',');
+            file.print(log_col_names[i]);
+        }
+        file.println();
+        file.close();
+        return true;
     }
-    file.println();
-    file.close();
+    return false;
 }
 
 bool IsOnFile(char const* filename, char const* mac)
@@ -164,9 +173,7 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(gps.altitude.meters(), 1);
                 file.print(',');
                 file.print((gps.hdop.value(), 1));
-                file.print(',');
-                file.print("WIFI");
-                file.println();
+                file.println(',WIFI');
                 file.close();
             }
         }
@@ -190,7 +197,7 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(",");
                 file.print(device.getName().c_str());
                 file.print(",");
-                file.print(device.getAppearance());
+                //file.print(device.getAppearance());
                 PutDateToFile(file);
                 file.print(",");
                 file.print(0);
