@@ -96,20 +96,31 @@ void UpdateScreen()
 
     display.fillRect(0, 0, display.width(), 8);
     display.setColor(OLEDDISPLAY_COLOR::INVERSE);
-    if (display.width() > 8 * (strlen(logFileName) + time.length())) {
+    if (display.width() > display.getStringWidth(String(logFileName) + time) + 16) {
         display.drawString(0, 0, logFileName);
-        display.drawString(0, display.width() - time.length() * 8, time);
+        display.drawString(0, display.width() - display.getStringWidth(time)/2, time);
+
+        display.drawLine(display.getStringWidth(String(logFileName)) + 7, 0, display.width() - display.getStringWidth(time) - 7, 0);
+        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 1, display.width() - display.getStringWidth(time) - 8, 1);
+        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 2, display.width() - display.getStringWidth(time) - 8, 2);
+        display.drawLine(display.getStringWidth(String(logFileName)) + 9, 3, display.width() - display.getStringWidth(time) - 9, 3);
+
+        display.drawLine(display.getStringWidth(String(logFileName)) + 9, 5, display.width() - display.getStringWidth(time) - 9, 5);
+        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 6, display.width() - display.getStringWidth(time) - 8, 6);
+        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 7, display.width() - display.getStringWidth(time) - 8, 7);
+        display.drawLine(display.getStringWidth(String(logFileName)) + 7, 8, display.width() - display.getStringWidth(time) - 7, 8);
     } else {
         display.drawString(0, display.width() / 2 - time.length() * 4, time);
     }
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
     display.fillRect(48, 8, display.width() - 48, display.height() - 8);
+
     display.drawString(0, 8, "GPS:");
-    display.drawString(display.width() - 8 * info.gps_status.length(), 8, info.gps_status);
+    display.drawString(display.width() - display.getStringWidth(info.gps_status), 8, info.gps_status);
     display.drawString(0, 16, "WiFi:");
-    display.drawString(display.width() - 8 * info.wifi_status.length(), 16, info.wifi_status);
+    display.drawString(display.width() - display.getStringWidth(info.wifi_status), 16, info.wifi_status);
     display.drawString(0, 24, "BT:");
-    display.drawString(display.width() - 8 * info.bte_status.length(), 24, info.bte_status);
+    display.drawString(display.width() - display.getStringWidth(info.bte_status), 24, info.bte_status);
 }
 
 void Panic(char const* message)
@@ -120,7 +131,7 @@ void Panic(char const* message)
     display.setColor(OLEDDISPLAY_COLOR::INVERSE);
     display.drawString(0, 0, "FATAL:");
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
-    display.drawString(0, 56, message);
+    display.drawStringMaxWidth(0, 10, display.width(), message);
 
     while (true)
         delay(200);
