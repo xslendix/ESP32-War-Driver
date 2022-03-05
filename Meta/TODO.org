@@ -1,0 +1,4 @@
+* The TODO
+** TODO Add OLED support
+** TODO Add support for OTA updates
+** TODO Add support for web server, this will be used for a way to download the log file(s).
