@@ -1,7 +1,5 @@
-<p align=center>
-<h1>ESP32 War Driver</h1>
-<p>War driving with an ESP32</p>
-</p>
+<h1 align=center>ESP32 War Driver</h1>
+<p align=center>War driving with an ESP32</p>
 
 ## Features
 
