@@ -2,6 +2,7 @@
 
 #include <BLEDevice.h>
 #include <SD.h>
+#include <SSD1306Wire.h>
 #include <TinyGPS++.h>
 #include <WiFi.h>
 
@@ -21,44 +22,104 @@ char const* log_col_names[LOG_COLUMN_COUNT] = {
 char const* PRE_HEADER = "WigleWifi-1.4,appRelease=1.0,model=ESP32,release=0.0.0,device=ESP32WarDriving,display=SSD1306,board=esp32,brand=WeMos";
 
 TinyGPSPlus gps;
+SSD1306Wire display(0x3C, 21, 22);
 
-uint total_networks = 0;
+struct Information {
+    String wifi_status = "";
+    String bte_status = "";
+    String gps_status = "";
+
+    uint wifi_count = -1;
+    uint bte_count = -1;
+} info;
 
 void UpdateFileName();
 bool PutHeader(char const*);
 void ScanWiFiAndBluetoothNetworks(char const*);
+void UpdateScreen();
+void Panic(char const*);
 
 void setup()
 {
     bool flag = true;
 
-    BLEDevice::init("netscan");
+    display.init();
+    display.drawString(0, 0, "Intializing...");
 
-    WiFi.mode(WIFI_STA);
+    BLEDevice::init("netscan");
+    if (!BLEDevice::getInitialized())
+        Panic("BLE initialization failed");
+
+    if (!WiFi.mode(WIFI_STA))
+        Panic("Failed to set WiFi mode to STATION");
     WiFi.disconnect();
     delay(100);
-    if (!SD.begin(5)) {
-        Serial.println("SD card failed to initialize");
-        flag = false;
-    }
 
-    if (flag) {
-        UpdateFileName();
-        if (!PutHeader(logFileName))
-            flag = false;
-        
-        if (!flag)
-            Serial.println("Failed to write header");
-    } else {
-        while (true) delay(200);
-    }
+    if (!SD.begin(5))
+        Panic("SD card failed to initialize");
+
+    UpdateFileName();
+    if (!PutHeader(logFileName))
+        flag = false;
+
+    if (!flag)
+        Panic("Failed to write header");
+    
+    display.clear();
 }
 
 void loop()
 {
     if (gps.location.isValid()) {
+        info.gps_status = "ONLINE";
         ScanWiFiAndBluetoothNetworks(logFileName);
+    } else {
+        info.gps_status = "OFFLINE";
     }
+
+    UpdateScreen();
+}
+
+void UpdateScreen()
+{
+    // display.clear();
+    auto time = String(gps.time.hour()) + ":" + String(gps.time.minute()) + ":" + String(gps.time.second());
+    if (info.wifi_count < 0)
+        info.wifi_status = "OFFLINE";
+    else
+        info.wifi_status = String(info.wifi_count);
+
+    if (info.bte_count < 0)
+        info.bte_status = "OFFLINE";
+    else
+        info.bte_status = String(info.bte_count);
+
+    display.fillRect(0, 0, display.width(), 8);
+    display.setColor(OLEDDISPLAY_COLOR::INVERSE);
+    display.drawString(0, 0, logFileName);
+    display.drawString(0, display.width() - time.length() * 8, time);
+    display.setColor(OLEDDISPLAY_COLOR::WHITE);
+    display.fillRect(48, 8, display.width() - 48, display.height() - 8);
+    display.drawString(0, 8, "GPS:");
+    display.drawString(display.width() - 8 * info.gps_status.length(), 8, info.gps_status);
+    display.drawString(0, 16, "WiFi:");
+    display.drawString(display.width() - 8 * info.wifi_status.length(), 16, info.wifi_status);
+    display.drawString(0, 24, "BT:");
+    display.drawString(display.width() - 8 * info.bte_status.length(), 24, info.bte_status);
+}
+
+void Panic(char const* message)
+{
+    Serial.printf("FATAL: %s\n", message);
+
+    display.clear();
+    display.setColor(OLEDDISPLAY_COLOR::INVERSE);
+    display.drawString(0, 0, "FATAL:");
+    display.setColor(OLEDDISPLAY_COLOR::WHITE);
+    display.drawString(0, 56, message);
+
+    while (true)
+        delay(200);
 }
 
 bool PutHeader(char const* filename)
@@ -146,7 +207,7 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
     } else {
         for (u8_t i = 0; i <= n; i++) {
             if ((!IsOnFile(filename, WiFi.BSSIDstr(i).c_str())) && (WiFi.channel(i) > 0) && (WiFi.channel(i) < 15)) {
-                total_networks++;
+                info.wifi_count++;
                 File file = SD.open(filename, FILE_APPEND);
                 if (!file) {
                     Serial.println("Failed to open file");
@@ -173,7 +234,7 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(gps.altitude.meters(), 1);
                 file.print(',');
                 file.print((gps.hdop.value(), 1));
-                file.println(',WIFI');
+                file.println(",WIFI");
                 file.close();
             }
         }
@@ -187,6 +248,7 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
 
         if (device.haveName()) {
             if (!IsOnFile(filename, device.getAddress().toString().c_str())) {
+                info.bte_count++;
                 File file = SD.open(filename, FILE_APPEND);
                 if (!file) {
                     Serial.println("Failed to open file");
@@ -197,7 +259,7 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(",");
                 file.print(device.getName().c_str());
                 file.print(",");
-                //file.print(device.getAppearance());
+                // file.print(device.getAppearance());
                 PutDateToFile(file);
                 file.print(",");
                 file.print(0);
