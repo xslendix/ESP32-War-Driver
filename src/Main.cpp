@@ -64,7 +64,7 @@ void setup()
 
     if (!flag)
         Panic("Failed to write header");
-    
+
     display.clear();
 }
 
@@ -96,8 +96,12 @@ void UpdateScreen()
 
     display.fillRect(0, 0, display.width(), 8);
     display.setColor(OLEDDISPLAY_COLOR::INVERSE);
-    display.drawString(0, 0, logFileName);
-    display.drawString(0, display.width() - time.length() * 8, time);
+    if (display.width() > 8 * (strlen(logFileName) + time.length())) {
+        display.drawString(0, 0, logFileName);
+        display.drawString(0, display.width() - time.length() * 8, time);
+    } else {
+        display.drawString(0, display.width() / 2 - time.length() * 4, time);
+    }
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
     display.fillRect(48, 8, display.width() - 48, display.height() - 8);
     display.drawString(0, 8, "GPS:");
