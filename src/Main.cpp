@@ -3,17 +3,15 @@
 #include <BLEDevice.h>
 #include <SD.h>
 #include <SSD1306Wire.h>
+#include <SoftwareSerial.h>
 #include <TinyGPS++.h>
 #include <WiFi.h>
 
-#include <stdint.h>
+#include "Config.h"
 
-char logFileName[20];
+#include "Data.h"
 
-uint const MAX_LOG_FILES = 100;
-uint const LOG_COLUMN_COUNT = 11;
-uint const LOG_RATE = 500;
-char const LOG_FILENAME[] = "netscan.csv";
+char logFileName[20] = { 0 };
 
 char const* log_col_names[LOG_COLUMN_COUNT] = {
     "MAC", "SSID", "AuthMode", "FirstSeen", "Channel", "RSSI", "Latitude", "Longitude", "AltitudeMeters", "AccuracyMeters", "Type"
@@ -21,16 +19,17 @@ char const* log_col_names[LOG_COLUMN_COUNT] = {
 
 char const* PRE_HEADER = "WigleWifi-1.4,appRelease=1.0,model=ESP32,release=0.0.0,device=ESP32WarDriving,display=SSD1306,board=esp32,brand=WeMos";
 
+SoftwareSerial ss(GPS_RX, GPS_TX);
 TinyGPSPlus gps;
-SSD1306Wire display(0x3C, 21, 22);
+SSD1306Wire display(OLED_ADDERSS, OLED_SDA, OLED_SCL, OLED_RES);
 
 struct Information {
     String wifi_status = "";
     String bte_status = "";
     String gps_status = "";
 
-    uint wifi_count = -1;
-    uint bte_count = -1;
+    int wifi_count = -1;
+    int bte_count = -1;
 } info;
 
 void UpdateFileName();
@@ -43,8 +42,19 @@ void setup()
 {
     bool flag = true;
 
-    display.init();
-    display.drawString(0, 0, "Intializing...");
+    Serial.begin(9600);
+
+    if (!display.init()) {
+        Serial.print("Display initialization failed");
+        for (;;)
+            delay(200);
+    }
+
+    display.setFont(Dialog_plain_8);
+    display.drawFastImage(display.getWidth()/2-16, display.getHeight()/2-16, 32, 32, SPLASH_DATA);
+    display.display();
+
+    delay(1000);
 
     BLEDevice::init("netscan");
     if (!BLEDevice::getInitialized())
@@ -55,7 +65,7 @@ void setup()
     WiFi.disconnect();
     delay(100);
 
-    if (!SD.begin(5))
+    if (!SD.begin(5, SPI, 4000000U, "/sd", 5U, true))
         Panic("SD card failed to initialize");
 
     UpdateFileName();
@@ -65,11 +75,19 @@ void setup()
     if (!flag)
         Panic("Failed to write header");
 
+    ss.begin(GPS_BAUD);
+
     display.clear();
+    display.display();
 }
 
 void loop()
 {
+    while (!ss.available())
+        ;
+
+    gps.encode(Serial1.read());
+
     if (gps.location.isValid()) {
         info.gps_status = "ONLINE";
         ScanWiFiAndBluetoothNetworks(logFileName);
@@ -82,8 +100,21 @@ void loop()
 
 void UpdateScreen()
 {
-    // display.clear();
-    auto time = String(gps.time.hour()) + ":" + String(gps.time.minute()) + ":" + String(gps.time.second());
+    display.clear();
+    String time = "";
+    if (gps.time.isValid())
+    {
+        uint8_t hour = gps.time.hour();
+        if (hour < 10)
+            hour = 0;
+
+        uint8_t minute = gps.time.minute();
+        if (minute < 10)
+            minute = 0;
+
+        time = String(hour, DEC) + ":" + String(minute, DEC);
+    }
+
     if (info.wifi_count < 0)
         info.wifi_status = "OFFLINE";
     else
@@ -94,26 +125,31 @@ void UpdateScreen()
     else
         info.bte_status = String(info.bte_count);
 
-    display.fillRect(0, 0, display.width(), 8);
-    display.setColor(OLEDDISPLAY_COLOR::INVERSE);
-    if (display.width() > display.getStringWidth(String(logFileName) + time) + 16) {
+    if (display.width() > display.getStringWidth(String(logFileName) + time) + 16 && time.length() > 0) {
         display.drawString(0, 0, logFileName);
-        display.drawString(0, display.width() - display.getStringWidth(time)/2, time);
+        display.drawString(display.width() - display.getStringWidth(time), 0, time);
 
-        display.drawLine(display.getStringWidth(String(logFileName)) + 7, 0, display.width() - display.getStringWidth(time) - 7, 0);
-        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 1, display.width() - display.getStringWidth(time) - 8, 1);
-        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 2, display.width() - display.getStringWidth(time) - 8, 2);
-        display.drawLine(display.getStringWidth(String(logFileName)) + 9, 3, display.width() - display.getStringWidth(time) - 9, 3);
+        for (int i = 1; i < 8; i += 2)
+            display.drawLine(
+                display.getStringWidth(String(logFileName)) + 2 + (i != 1 && i != 7 ? 1 : 0), i,
+                display.width() - display.getStringWidth(time) - 3 - (i != 1 && i != 7 ? 1 : 0), i
+            );
 
-        display.drawLine(display.getStringWidth(String(logFileName)) + 9, 5, display.width() - display.getStringWidth(time) - 9, 5);
-        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 6, display.width() - display.getStringWidth(time) - 8, 6);
-        display.drawLine(display.getStringWidth(String(logFileName)) + 8, 7, display.width() - display.getStringWidth(time) - 8, 7);
-        display.drawLine(display.getStringWidth(String(logFileName)) + 7, 8, display.width() - display.getStringWidth(time) - 7, 8);
     } else {
-        display.drawString(0, display.width() / 2 - time.length() * 4, time);
+        display.setColor(OLEDDISPLAY_COLOR::WHITE);
+
+        for (int i = 1; i < 8; i += 2)
+            display.drawLine(0, i, display.width(), i);
+
+        display.setColor(OLEDDISPLAY_COLOR::BLACK);
+
+        display.fillRect(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2 - 2, 0, display.getStringWidth(time.length() ? time : logFileName) + 4, 8);
+        display.fillRect(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2 - 3, 2, display.getStringWidth(time.length() ? time : logFileName) + 6, 5);
+
+        display.setColor(OLEDDISPLAY_COLOR::WHITE);
+        display.drawString(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2, 0, time.length() ? time : logFileName);
     }
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
-    display.fillRect(48, 8, display.width() - 48, display.height() - 8);
 
     display.drawString(0, 8, "GPS:");
     display.drawString(display.width() - display.getStringWidth(info.gps_status), 8, info.gps_status);
@@ -121,6 +157,8 @@ void UpdateScreen()
     display.drawString(display.width() - display.getStringWidth(info.wifi_status), 16, info.wifi_status);
     display.drawString(0, 24, "BT:");
     display.drawString(display.width() - display.getStringWidth(info.bte_status), 24, info.bte_status);
+
+    display.display();
 }
 
 void Panic(char const* message)
@@ -132,6 +170,8 @@ void Panic(char const* message)
     display.drawString(0, 0, "FATAL:");
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
     display.drawStringMaxWidth(0, 10, display.width(), message);
+
+    display.display();
 
     while (true)
         delay(200);
