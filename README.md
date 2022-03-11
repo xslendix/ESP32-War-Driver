@@ -13,10 +13,10 @@
 ### Hardware
 
 Parts:
- * WeMos D1 Mini ESP32
- * MicroSD Card Reader
- * GY-NEO6MV2 + Antenna
- * SSD1306 I²C OLED Display.
+ * WeMos D1 Mini ESP32 ([AliExpress](https://www.aliexpress.com/item/32815530502.html))
+ * MicroSD Card Reader ([AliExpress](https://www.aliexpress.com/item/32938935724.html))
+ * GY-NEO6MV2 + Antenna ([AliExpress](https://www.aliexpress.com/item/1005001635722164.html))
+ * SSD1306 I²C OLED Display ([AliExpress](https://www.aliexpress.com/item/32879702750.html))
 
 Wiring diagram (also available as a [Fritzing file](Meta/Diag.fzz)):
 ![diagram](/Meta/Diag.png)
