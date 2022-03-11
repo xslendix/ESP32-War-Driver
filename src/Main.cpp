@@ -65,7 +65,7 @@ void setup()
     WiFi.disconnect();
     delay(100);
 
-    if (!SD.begin(5, SPI, 4000000U, "/sd", 5U, true))
+    if (!SD.begin(5))
         Panic("SD card failed to initialize");
 
     UpdateFileName();
@@ -339,7 +339,7 @@ void UpdateFileName()
     int i = 0;
     for (; i < MAX_LOG_FILES; i++) {
         memset(logFileName, 0, strlen(logFileName));
-        sprintf(logFileName, "%i.log.csv", i);
+        sprintf(logFileName, "/%i.log.csv", i);
         if (!SD.exists(logFileName)) {
             break;
         } else {
