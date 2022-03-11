@@ -22,3 +22,7 @@ uint32_t const GPS_BAUD = 9600;
 unsigned int const MAX_LOG_FILES = 100;
 unsigned int const LOG_COLUMN_COUNT = 11;
 unsigned int const LOG_RATE = 500;
+
+#define DEVICE_VERSION "1.0.0"
+#define DEVICE_APP_RELEASE "1.0"
+#define DEVICE_CODENAME "frailangel"

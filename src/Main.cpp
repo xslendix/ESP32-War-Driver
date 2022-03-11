@@ -17,7 +17,7 @@ char const* log_col_names[LOG_COLUMN_COUNT] = {
     "MAC", "SSID", "AuthMode", "FirstSeen", "Channel", "RSSI", "Latitude", "Longitude", "AltitudeMeters", "AccuracyMeters", "Type"
 };
 
-char const* PRE_HEADER = "WigleWifi-1.4,appRelease=1.0,model=ESP32,release=0.0.0,device=ESP32WarDriving,display=SSD1306,board=esp32,brand=WeMos";
+char const* PRE_HEADER = "WigleWifi-1.4,appRelease=" DEVICE_APP_RELEASE ",model=D1 Mini,release=" DEVICE_VERSION ",device=" DEVICE_CODENAME ",display=SSD1306,board=espressif32,brand=WeMos";
 
 SoftwareSerial ss(GPS_RX, GPS_TX);
 TinyGPSPlus gps;
@@ -51,7 +51,7 @@ void setup()
     }
 
     display.setFont(Dialog_plain_8);
-    display.drawFastImage(display.getWidth()/2-16, display.getHeight()/2-16, 32, 32, SPLASH_DATA);
+    display.drawFastImage(display.getWidth() / 2 - 16, display.getHeight() / 2 - 16, 32, 32, SPLASH_DATA);
     display.display();
 
     delay(1000);
@@ -102,8 +102,7 @@ void UpdateScreen()
 {
     display.clear();
     String time = "";
-    if (gps.time.isValid())
-    {
+    if (gps.time.isValid()) {
         uint8_t hour = gps.time.hour();
         if (hour < 10)
             hour = 0;
@@ -132,8 +131,7 @@ void UpdateScreen()
         for (int i = 1; i < 8; i += 2)
             display.drawLine(
                 display.getStringWidth(String(logFileName)) + 2 + (i != 1 && i != 7 ? 1 : 0), i,
-                display.width() - display.getStringWidth(time) - 3 - (i != 1 && i != 7 ? 1 : 0), i
-            );
+                display.width() - display.getStringWidth(time) - 3 - (i != 1 && i != 7 ? 1 : 0), i);
 
     } else {
         display.setColor(OLEDDISPLAY_COLOR::WHITE);
