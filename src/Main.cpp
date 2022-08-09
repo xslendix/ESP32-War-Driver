@@ -65,7 +65,7 @@ void setup()
     WiFi.disconnect();
     delay(100);
 
-    if (!SD.begin(5))
+    if (!SD.begin(SS, SPI, 4000000, "/sd", 5, true))
         Panic("SD card failed to initialize");
 
     UpdateFileName();
