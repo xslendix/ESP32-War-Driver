@@ -68,6 +68,19 @@ void setup()
     if (!SD.begin(SS, SPI, 4000000, "/sd", 5, true))
         Panic("SD card failed to initialize");
 
+    ss.begin(GPS_BAUD);
+
+    display.clear();
+    display.setColor(OLEDDISPLAY_COLOR::WHITE);
+    display.drawStringMaxWidth(0, 0, display.width(), "Waiting for GPS...");
+    display.display();
+
+    while (!ss.available())
+        ;
+
+    while (!(ss.readStringUntil('\n').startsWith("$GP")))
+        ;
+
     UpdateFileName();
     if (!PutHeader(logFileName))
         flag = false;
@@ -75,17 +88,12 @@ void setup()
     if (!flag)
         Panic("Failed to write header");
 
-    ss.begin(GPS_BAUD);
-
     display.clear();
     display.display();
 }
 
 void loop()
 {
-    while (!ss.available())
-        ;
-
     gps.encode(Serial1.read());
 
     if (gps.location.isValid()) {
