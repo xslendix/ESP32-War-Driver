@@ -152,8 +152,11 @@ void UpdateScreen()
         display.fillRect(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2 - 2, 0, display.getStringWidth(time.length() ? time : logFileName) + 4, 8);
         display.fillRect(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2 - 3, 2, display.getStringWidth(time.length() ? time : logFileName) + 6, 5);
 
+        display.fillRect(0, 0, display.getStringWidth(String(gps.satellites.value())) + 2, 8);
+
         display.setColor(OLEDDISPLAY_COLOR::WHITE);
         display.drawString(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2, 0, time.length() ? time : logFileName);
+        display.drawString(0, 0, String(gps.satellites.value()));
     }
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
 
