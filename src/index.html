@@ -1,0 +1,26 @@
+<p>Current log file: <span if="log">unknown</span></p>
+<p>Disk space: <span id="disk">unknown</span>/<span id="total">unknown</span>KB</p>
+<p>GPS: <span id="gps">unknown (0)</span></p>
+<p>WiFi: <span id="wifi">unknown</span></p>
+<p>BT: <span id="bt">unknown</span></p>
+
+<script>
+const log = document.getElementById('log')
+const disk = document.getElementById('disk')
+const total = document.getElementById('total')
+const gps = document.getElementById('gps')
+const wifi = document.getElementById('wifi')
+const bt = document.getElementById('bt')
+
+setInterval(() => {
+	const req = new Request('/info', { method: 'GET' })
+	req.json().then(d => {
+		log.innerHTML = d.log
+		disk.innerHTML = d.disk
+		total.innerHTML = d.total
+		gps.innerHTML = `${d.gps} (${d.sat})`
+		wifi.innerHTML = d.wifi
+		bt.innerHTML = d.bt
+	})
+}, 1000)
+</script>

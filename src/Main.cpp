@@ -4,8 +4,10 @@
 #include <SD.h>
 #include <SSD1306Wire.h>
 #include <SoftwareSerial.h>
-#include <TinyGPS++.h>
+#include <TinyGPSPlus.h>
 #include <WiFi.h>
+
+#include <ESPAsyncWebServer.h>
 
 #include "Config.h"
 
@@ -13,15 +15,47 @@
 
 char logFileName[20] = { 0 };
 
-char const* log_col_names[LOG_COLUMN_COUNT] = {
+char const *log_col_names[LOG_COLUMN_COUNT] = {
     "MAC", "SSID", "AuthMode", "FirstSeen", "Channel", "RSSI", "Latitude", "Longitude", "AltitudeMeters", "AccuracyMeters", "Type"
 };
 
-char const* PRE_HEADER = "WigleWifi-1.4,appRelease=" DEVICE_APP_RELEASE ",model=D1 Mini,release=" DEVICE_VERSION ",device=" DEVICE_CODENAME ",display=SSD1306,board=espressif32,brand=WeMos";
+char const *PRE_HEADER = "WigleWifi-1.4,appRelease=" DEVICE_APP_RELEASE ",model=D1 Mini,release=" DEVICE_VERSION ",device=" DEVICE_CODENAME ",display=SSD1306,board=espressif32,brand=WeMos";
+
+char const INDEX_HTML[] PROGMEM =
+"<link rel=icon href=data:,><pre style=font:unset>"
+"Current log file: <span id=\"log\">unknown</span>\n"
+"Disk space: <span id=\"disk\">unknown</span>/<span id=\"total\">unknown</span>KB\n"
+"GPS: <span id=\"gps\">unknown (0)</span>\n"
+"WiFi: <span id=\"wifi\">unknown</span>\n"
+"BT: <span id=\"bt\">unknown</span>\n"
+"<button onclick=\"wipe();\">WIPE</button>"
+"<script>"
+"function wipe() {\n"
+"	if (confirm('ARE YOU SURE YOU WANT TO WIPE ALL DATA?'))\n"
+"		fetch('/wipe', { method: 'POST' });\n"
+"}\n"
+"const log = document.getElementById('log')\n"
+"const disk = document.getElementById('disk')\n"
+"const total = document.getElementById('total')\n"
+"const gps = document.getElementById('gps')\n"
+"const wifi = document.getElementById('wifi')\n"
+"const bt = document.getElementById('bt')\n"
+"setInterval(() => {\n"
+"	fetch('/info').then(r => r.json()).then(d => {\n"
+"		log.innerText = d.log\n"
+"		disk.innerText = d.disk\n"
+"		total.innerText = d.total\n"
+"		gps.innerText = `${d.gps} (${d.sat})`\n"
+"		wifi.innerText = d.wifi\n"
+"		bt.innerText = d.bt\n"
+"	}).catch(err => console.error)\n"
+"}, 2000)\n"
+"</script>";
 
 SoftwareSerial ss(GPS_RX, GPS_TX);
 TinyGPSPlus gps;
 SSD1306Wire display(OLED_ADDERSS, OLED_SDA, OLED_SCL, OLED_RES);
+AsyncWebServer server(80);
 
 struct Information {
     String wifi_status = "";
@@ -37,10 +71,29 @@ bool PutHeader(char const*);
 void ScanWiFiAndBluetoothNetworks(char const*);
 void UpdateScreen();
 void Panic(char const*);
+String GenearateData();
+
+bool wipe = false;
+
+void WipeAllFiles() {
+    if (wipe == false) return;
+
+    File root = SD.open("/");
+    for (;;) {
+        File entry = root.openNextFile();
+        if (!entry) break;
+        char const *path = entry.path();
+        entry.close();
+        SD.remove(path);
+    }
+    root.close();
+}
 
 void setup()
 {
     bool flag = true;
+
+    WiFi.mode(WIFI_AP_STA);
 
     Serial.begin(9600);
 
@@ -50,11 +103,16 @@ void setup()
             delay(200);
     }
 
+    if (!SD.begin(SS, SPI, 4000000, "/sd", 5, true))
+        Panic("SD card failed to initialize");
+
     display.setFont(Dialog_plain_8);
     display.drawFastImage(display.getWidth() / 2 - 16, display.getHeight() / 2 - 16, 32, 32, SPLASH_DATA);
     display.display();
 
-    delay(1000);
+    UpdateFileName();
+
+    delay(500);
 
     BLEDevice::init("netscan");
     if (!BLEDevice::getInitialized())
@@ -64,9 +122,6 @@ void setup()
         Panic("Failed to set WiFi mode to STATION");
     WiFi.disconnect();
     delay(100);
-
-    if (!SD.begin(SS, SPI, 4000000, "/sd", 5, true))
-        Panic("SD card failed to initialize");
 
     ss.begin(GPS_BAUD);
 
@@ -81,7 +136,6 @@ void setup()
     while (!(ss.readStringUntil('\n').startsWith("$GP")))
         ;
 
-    UpdateFileName();
     if (!PutHeader(logFileName))
         flag = false;
 
@@ -90,12 +144,40 @@ void setup()
 
     display.clear();
     display.display();
+
+    Serial.println("Setting up AP...");
+    WiFi.softAP(WIFI_SSID, WIFI_PSWD, 1, 0, 5);
+
+    WiFi.softAPConfig(IP, Gateway, Mask);
+
+    IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(IP);
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", INDEX_HTML);
+    });
+
+    server.on("/info", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", GenearateData());
+    });
+
+    server.on("/wipe", HTTP_POST, [](AsyncWebServerRequest *request) {
+        wipe = true;
+        request->send(200, "text/plain", "OK");
+    });
+
+    server.begin();
 }
 
 void loop()
 {
-    gps.encode(Serial1.read());
+    WipeAllFiles();
+    if (wipe) {
+        ESP.restart();
+    }
 
+    gps.encode(ss.read());
     if (gps.location.isValid()) {
         info.gps_status = "ONLINE";
         ScanWiFiAndBluetoothNetworks(logFileName);
@@ -109,18 +191,6 @@ void loop()
 void UpdateScreen()
 {
     display.clear();
-    String time = "";
-    if (gps.time.isValid()) {
-        uint8_t hour = gps.time.hour();
-        if (hour < 10)
-            hour = 0;
-
-        uint8_t minute = gps.time.minute();
-        if (minute < 10)
-            minute = 0;
-
-        time = String(hour, DEC) + ":" + String(minute, DEC);
-    }
 
     if (info.wifi_count < 0)
         info.wifi_status = "OFFLINE";
@@ -132,32 +202,22 @@ void UpdateScreen()
     else
         info.bte_status = String(info.bte_count);
 
-    if (display.width() > display.getStringWidth(String(logFileName) + time) + 16 && time.length() > 0) {
-        display.drawString(0, 0, logFileName);
-        display.drawString(display.width() - display.getStringWidth(time), 0, time);
+    display.setColor(OLEDDISPLAY_COLOR::WHITE);
 
-        for (int i = 1; i < 8; i += 2)
-            display.drawLine(
-                display.getStringWidth(String(logFileName)) + 2 + (i != 1 && i != 7 ? 1 : 0), i,
-                display.width() - display.getStringWidth(time) - 3 - (i != 1 && i != 7 ? 1 : 0), i);
+    for (int i = 1; i < 8; i += 2)
+        display.drawLine(0, i, display.width(), i);
 
-    } else {
-        display.setColor(OLEDDISPLAY_COLOR::WHITE);
+    display.setColor(OLEDDISPLAY_COLOR::BLACK);
 
-        for (int i = 1; i < 8; i += 2)
-            display.drawLine(0, i, display.width(), i);
+    display.fillRect(display.width() / 2 - display.getStringWidth(logFileName) / 2 - 2, 0, display.getStringWidth(logFileName) + 4, 8);
+    display.fillRect(display.width() / 2 - display.getStringWidth(logFileName) / 2 - 3, 2, display.getStringWidth(logFileName) + 6, 5);
 
-        display.setColor(OLEDDISPLAY_COLOR::BLACK);
+    display.fillRect(0, 0, display.getStringWidth(String(gps.satellites.value())) + 2, 8);
 
-        display.fillRect(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2 - 2, 0, display.getStringWidth(time.length() ? time : logFileName) + 4, 8);
-        display.fillRect(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2 - 3, 2, display.getStringWidth(time.length() ? time : logFileName) + 6, 5);
+    display.setColor(OLEDDISPLAY_COLOR::WHITE);
+    display.drawString(display.width() / 2 - display.getStringWidth(logFileName) / 2, 0, logFileName);
+    display.drawString(0, 0, String(gps.satellites.value()));
 
-        display.fillRect(0, 0, display.getStringWidth(String(gps.satellites.value())) + 2, 8);
-
-        display.setColor(OLEDDISPLAY_COLOR::WHITE);
-        display.drawString(display.width() / 2 - display.getStringWidth(time.length() ? time : logFileName) / 2, 0, time.length() ? time : logFileName);
-        display.drawString(0, 0, String(gps.satellites.value()));
-    }
     display.setColor(OLEDDISPLAY_COLOR::WHITE);
 
     display.drawString(0, 8, "GPS:");
@@ -291,13 +351,13 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(',');
                 file.print(WiFi.RSSI(i));
                 file.print(',');
-                file.print(gps.location.lat(), 6);
+                file.print(gps.location.lat());
                 file.print(',');
-                file.print(gps.location.lng(), 6);
+                file.print(gps.location.lng());
                 file.print(',');
-                file.print(gps.altitude.meters(), 1);
+                file.print(gps.altitude.meters());
                 file.print(',');
-                file.print((gps.hdop.value(), 1));
+                file.print(gps.hdop.value());
                 file.println(",WIFI");
                 file.close();
             }
@@ -330,13 +390,13 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(",");
                 file.print(device.getRSSI());
                 file.print(",");
-                file.print(gps.location.lat(), 6);
-                file.print(",");
-                file.print(gps.location.lng(), 6);
-                file.print(",");
+                file.print(gps.location.lat());
+                file.print(',');
+                file.print(gps.location.lng());
+                file.print(',');
                 file.print(gps.altitude.meters());
-                file.print(",");
-                file.print((gps.hdop.value(), 1));
+                file.print(',');
+                file.print(gps.hdop.value());
                 file.println(",BLE");
 
                 file.close();
@@ -360,4 +420,16 @@ void UpdateFileName()
     }
     Serial.print("File name: ");
     Serial.println(logFileName);
+}
+
+inline String GenearateData()
+{
+    String tmp = String("{\"log\":\"") + logFileName + "\",";
+    tmp += String("\"disk\":") + (double)SD.usedBytes()/1000 + ",";
+    tmp += String("\"total\":") + (double)SD.totalBytes()/1000 + ",";
+    tmp += String("\"gps\":\"") + info.gps_status + "\",";
+    tmp += String("\"sat\":") + gps.satellites.value() + ",";
+    tmp += String("\"wifi\":\"") + info.wifi_status + "(" + info.wifi_count + ")\",";
+    tmp += String("\"bt\":\"") + info.bte_status + "(" + info.bte_count + ")\"}";
+    return tmp;
 }
