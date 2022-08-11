@@ -351,13 +351,13 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(',');
                 file.print(WiFi.RSSI(i));
                 file.print(',');
-                file.print(gps.location.lat());
+                file.print(gps.location.lat(), 6);
                 file.print(',');
-                file.print(gps.location.lng());
+                file.print(gps.location.lng(), 6);
                 file.print(',');
-                file.print(gps.altitude.meters());
+                file.print(gps.altitude.meters(), 1);
                 file.print(',');
-                file.print(gps.hdop.value());
+                file.print((gps.hdop.value(), 1));
                 file.println(",WIFI");
                 file.close();
             }
@@ -390,13 +390,13 @@ void ScanWiFiAndBluetoothNetworks(char const* filename)
                 file.print(",");
                 file.print(device.getRSSI());
                 file.print(",");
-                file.print(gps.location.lat());
+                file.print(gps.location.lat(), 6);
                 file.print(',');
-                file.print(gps.location.lng());
+                file.print(gps.location.lng(), 6);
                 file.print(',');
-                file.print(gps.altitude.meters());
+                file.print(gps.altitude.meters(), 1);
                 file.print(',');
-                file.print(gps.hdop.value());
+                file.print((gps.hdop.value(), 1));
                 file.println(",BLE");
 
                 file.close();
