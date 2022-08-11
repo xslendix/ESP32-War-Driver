@@ -22,7 +22,7 @@ char const *log_col_names[LOG_COLUMN_COUNT] = {
 char const *PRE_HEADER = "WigleWifi-1.4,appRelease=" DEVICE_APP_RELEASE ",model=D1 Mini,release=" DEVICE_VERSION ",device=" DEVICE_CODENAME ",display=SSD1306,board=espressif32,brand=WeMos";
 
 char const INDEX_HTML[] PROGMEM =
-"<link rel=icon href=data:,><pre style=font:unset>"
+"<link rel=icon href=data:,><pre style=font:unset>CONTENT UPDATED EVERY 5 SECONDS!\n\n"
 "Current log file: <span id=\"log\">unknown</span>\n"
 "Disk space: <span id=\"disk\">unknown</span>/<span id=\"total\">unknown</span>KB\n"
 "GPS: <span id=\"gps\">unknown (0)</span>\n"
@@ -49,7 +49,7 @@ char const INDEX_HTML[] PROGMEM =
 "		wifi.innerText = d.wifi\n"
 "		bt.innerText = d.bt\n"
 "	}).catch(err => console.error)\n"
-"}, 2000)\n"
+"}, 5000)\n"
 "</script>";
 
 SoftwareSerial ss(GPS_RX, GPS_TX);
